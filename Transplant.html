@@ -1,0 +1,480 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบลงทะเบียน Transplant Team Learning Series</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- โหลดไลบรารีสำหรับ Export Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    
+    <!-- โหลด Firebase SDK (Compat Version สำหรับหน้าเว็บ HTML ทั่วไป) -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Sarabun', sans-serif; background-color: #f9fafb; }
+        .tab-active { border-bottom-width: 4px; border-color: #10b981; color: #10b981; font-weight: 600; }
+        .tab-inactive { color: #6b7280; font-weight: 500; }
+        .tab-inactive:hover { color: #374151; }
+    </style>
+</head>
+<body class="text-gray-800">
+
+    <!-- แถบเมนู (Tabs) -->
+    <div class="bg-white shadow-sm mb-6">
+        <div class="max-w-6xl mx-auto px-4">
+            <div class="flex space-x-8">
+                <button id="tab-register" onclick="switchTab('register')" class="py-4 px-2 tab-active text-lg flex items-center">
+                    📝 แบบฟอร์มลงทะเบียน
+                </button>
+                <button id="tab-admin" onclick="switchTab('admin')" class="py-4 px-2 tab-inactive text-lg flex items-center">
+                    📋 ตรวจสอบการลงทะเบียน
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ส่วนที่ 1: หน้าลงทะเบียน -->
+    <div id="view-register" class="max-w-5xl mx-auto px-4 pb-12 block">
+        <div class="bg-white rounded-2xl shadow-lg p-8">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">ลงทะเบียนเข้าร่วมการประชุม</h1>
+                <h2 class="text-xl text-gray-600">Transplant Team Learning Series</h2>
+            </div>
+
+            <form id="registrationForm" onsubmit="submitForm(event)">
+                
+                <!-- ข้อมูลส่วนตัว -->
+                <h3 class="text-lg font-bold text-green-600 mb-4 border-b pb-2 border-green-100 flex items-center">
+                    <span class="mr-2">👤</span> ข้อมูลส่วนบุคคล
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ชื่อ-นามสกุล *</label>
+                        <input type="text" id="fullName" required class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">ตำแหน่ง/วิชาชีพ *</label>
+                        <select id="profession" onchange="toggleOtherProfession()" required class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none mb-2">
+                            <option value="">-- เลือกตำแหน่ง/วิชาชีพ --</option>
+                            <option value="แพทย์">แพทย์</option>
+                            <option value="พยาบาล">พยาบาล</option>
+                            <option value="เภสัชกร">เภสัชกร</option>
+                            <option value="อื่นๆ">อื่นๆ (โปรดระบุ)</option>
+                        </select>
+                        <input type="text" id="professionOther" placeholder="โปรดระบุตำแหน่งของคุณ" class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none hidden">
+                    </div>
+
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">หน่วยงาน *</label>
+                        <input type="text" id="department" required class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none">
+                    </div>
+                    
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-1">เบอร์โทรศัพท์ติดต่อ *</label>
+                        <input type="tel" id="phone" required class="w-full border border-gray-300 rounded-lg px-4 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500 outline-none">
+                    </div>
+                </div>
+
+                <!-- เลือกวันที่เข้าร่วม -->
+                <h3 class="text-lg font-bold text-green-600 mb-4 border-b pb-2 border-green-100 flex items-center">
+                    <span class="mr-2">📅</span> เลือกหัวข้อและวันที่เข้าร่วม
+                </h3>
+                
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                    
+                    <!-- กล่อง 1: Kidney Transplant -->
+                    <div class="bg-blue-50 border-2 border-blue-200 rounded-xl p-5">
+                        <h4 class="text-xl font-bold text-blue-700 text-center mb-4">Kidney Transplant</h4>
+                        <div class="space-y-3">
+                            <label class="flex items-center space-x-3 cursor-pointer p-1 hover:bg-blue-100 rounded">
+                                <input type="radio" name="kidney" value="8 มกราคม 2570" class="w-5 h-5 text-blue-600">
+                                <span>8 มกราคม 2570</span>
+                            </label>
+                            <label class="flex items-center space-x-3 cursor-pointer p-1 hover:bg-blue-100 rounded">
+                                <input type="radio" name="kidney" value="16 เมษายน 2570" class="w-5 h-5 text-blue-600">
+                                <span>16 เมษายน 2570</span>
+                            </label>
+                            <label class="flex items-center space-x-3 cursor-pointer p-1 hover:bg-blue-100 rounded">
+                                <input type="radio" name="kidney" value="9 กรกฎาคม 2570" class="w-5 h-5 text-blue-600">
+                                <span>9 กรกฎาคม 2570</span>
+                            </label>
+                            <div class="border-t border-blue-200 my-2"></div>
+                            <label class="flex items-center space-x-3 cursor-pointer p-1">
+                                <input type="radio" name="kidney" value="ไม่เข้าร่วมหัวข้อนี้" checked class="w-5 h-5 text-gray-400">
+                                <span class="text-gray-500 text-sm">ไม่เข้าร่วมหัวข้อนี้</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- กล่อง 2: Organ Donor -->
+                    <div class="bg-pink-50 border-2 border-pink-200 rounded-xl p-5">
+                        <h4 class="text-xl font-bold text-pink-600 text-center mb-4">Organ Donor</h4>
+                        <div class="space-y-3">
+                            <label class="flex items-center space-x-3 cursor-pointer p-1 hover:bg-pink-100 rounded">
+                                <input type="radio" name="organ" value="11 ธันวาคม 2569" class="w-5 h-5 text-pink-500">
+                                <span>11 ธันวาคม 2569</span>
+                            </label>
+                            <label class="flex items-center space-x-3 cursor-pointer p-1 hover:bg-pink-100 rounded">
+                                <input type="radio" name="organ" value="12 มีนาคม 2570" class="w-5 h-5 text-pink-500">
+                                <span>12 มีนาคม 2570</span>
+                            </label>
+                            <label class="flex items-center space-x-3 cursor-pointer p-1 hover:bg-pink-100 rounded">
+                                <input type="radio" name="organ" value="11 มิถุนายน 2570" class="w-5 h-5 text-pink-500">
+                                <span>11 มิถุนายน 2570</span>
+                            </label>
+                            <div class="border-t border-pink-200 my-2"></div>
+                            <label class="flex items-center space-x-3 cursor-pointer p-1">
+                                <input type="radio" name="organ" value="ไม่เข้าร่วมหัวข้อนี้" checked class="w-5 h-5 text-gray-400">
+                                <span class="text-gray-500 text-sm">ไม่เข้าร่วมหัวข้อนี้</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- กล่อง 3: Heart Transplant -->
+                    <div class="bg-green-50 border-2 border-green-200 rounded-xl p-5">
+                        <h4 class="text-xl font-bold text-green-700 text-center mb-4">Heart Transplant</h4>
+                        <div class="space-y-3">
+                            <label class="flex items-center space-x-3 cursor-pointer p-1 hover:bg-green-100 rounded">
+                                <input type="radio" name="heart" value="19 กุมภาพันธ์ 2570" class="w-5 h-5 text-green-600">
+                                <span>19 กุมภาพันธ์ 2570</span>
+                            </label>
+                            <label class="flex items-center space-x-3 cursor-pointer p-1 hover:bg-green-100 rounded">
+                                <input type="radio" name="heart" value="21 พฤษภาคม 2570" class="w-5 h-5 text-green-600">
+                                <span>21 พฤษภาคม 2570</span>
+                            </label>
+                            <label class="flex items-center space-x-3 cursor-pointer p-1 hover:bg-green-100 rounded">
+                                <input type="radio" name="heart" value="13 สิงหาคม 2570" class="w-5 h-5 text-green-600">
+                                <span>13 สิงหาคม 2570</span>
+                            </label>
+                            <div class="border-t border-green-200 my-2"></div>
+                            <label class="flex items-center space-x-3 cursor-pointer p-1">
+                                <input type="radio" name="heart" value="ไม่เข้าร่วมหัวข้อนี้" checked class="w-5 h-5 text-gray-400">
+                                <span class="text-gray-500 text-sm">ไม่เข้าร่วมหัวข้อนี้</span>
+                            </label>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="text-center mt-8">
+                    <button type="submit" class="bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-10 rounded-full shadow-lg transition duration-200 transform hover:scale-105 text-lg" id="submitBtn">
+                        ยืนยันการลงทะเบียน
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ส่วนที่ 2: หน้าแอดมิน -->
+    <div id="view-admin" class="max-w-7xl mx-auto px-4 pb-12 hidden">
+        <div class="bg-white rounded-2xl shadow-lg p-8">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800">รายชื่อผู้ลงทะเบียน</h2>
+                    <p class="text-gray-500">ข้อมูลอัปเดตแบบ Real-time จากระบบฐานข้อมูล</p>
+                </div>
+                <button onclick="exportToExcel()" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded-lg shadow flex items-center transition duration-200">
+                    <span class="mr-2">📊</span> Export Excel
+                </button>
+            </div>
+
+            <div class="overflow-x-auto rounded-lg border border-gray-200">
+                <table class="min-w-full text-left text-sm whitespace-nowrap">
+                    <thead class="bg-gray-100 text-gray-700">
+                        <tr>
+                            <th class="px-6 py-4 font-semibold">ชื่อ-นามสกุล</th>
+                            <th class="px-6 py-4 font-semibold">ตำแหน่ง</th>
+                            <th class="px-6 py-4 font-semibold">หน่วยงาน</th>
+                            <th class="px-6 py-4 font-semibold">เบอร์โทรศัพท์</th>
+                            <th class="px-6 py-4 font-semibold text-blue-700">Kidney</th>
+                            <th class="px-6 py-4 font-semibold text-pink-600">Organ Donor</th>
+                            <th class="px-6 py-4 font-semibold text-green-700">Heart</th>
+                            <th class="px-6 py-4 font-semibold text-center">จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="divide-y divide-gray-200">
+                        <!-- ข้อมูลจะถูกดึงมาใส่ที่นี่ -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div id="emptyState" class="text-center py-10 text-gray-500">
+                กำลังโหลดข้อมูล...
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal แจ้งเตือนแบบ Custom -->
+    <div id="customModal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-50">
+        <div class="bg-white rounded-xl shadow-2xl p-6 max-w-sm w-full mx-4 transform transition-all">
+            <div class="text-center">
+                <div id="modalIcon" class="mx-auto flex items-center justify-center h-12 w-12 rounded-full mb-4"></div>
+                <h3 id="modalTitle" class="text-lg font-bold text-gray-900 mb-2"></h3>
+                <p id="modalMessage" class="text-sm text-gray-500 mb-6"></p>
+                <div class="flex justify-center space-x-3">
+                    <button id="modalCancelBtn" onclick="closeModal()" class="hidden bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-200">ยกเลิก</button>
+                    <button id="modalConfirmBtn" onclick="closeModal()" class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg transition duration-200">ตกลง</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Javascript -->
+    <script>
+        // ==========================================
+        // 1. ตั้งค่า Firebase ของคุณ
+        // ==========================================
+        const firebaseConfig = {
+            apiKey: "AIzaSyCJPNRtc1BSvpmfJP-Y1HcirWEPvWdiHxo",
+            authDomain: "register-612dc.firebaseapp.com",
+            projectId: "register-612dc",
+            storageBucket: "register-612dc.firebasestorage.app",
+            messagingSenderId: "872853469363",
+            appId: "1:872853469363:web:a608f3b575a6f6cc7858c6",
+            measurementId: "G-ZXREEFQXSP"
+        };
+
+        // เริ่มต้นการเชื่อมต่อ Firebase
+        if (!firebase.apps.length) {
+            firebase.initializeApp(firebaseConfig);
+        }
+        const db = firebase.firestore();
+
+        let registrations = [];
+        let editId = null; // เก็บ Document ID ของรายการที่กำลังแก้ไข
+
+        // ==========================================
+        // 2. ดึงข้อมูลแบบ Real-time (ทำงานทันทีที่เปิดเว็บ)
+        // ==========================================
+        db.collection("ttls_registrations").orderBy("timestamp", "desc").onSnapshot((querySnapshot) => {
+            registrations = [];
+            querySnapshot.forEach((doc) => {
+                registrations.push({ id: doc.id, ...doc.data() });
+            });
+            renderTable();
+        }, (error) => {
+            console.error("Error fetching data: ", error);
+            document.getElementById('emptyState').innerText = "เชื่อมต่อฐานข้อมูลล้มเหลว กรุณาตรวจสอบว่าได้สร้าง Firestore Database และตั้งกฎเป็น Test Mode แล้วหรือยัง";
+        });
+
+        // ==========================================
+        // 3. ฟังก์ชันระบบ UI และการจัดการแบบฟอร์ม
+        // ==========================================
+        function toggleOtherProfession() {
+            const select = document.getElementById('profession');
+            const otherInput = document.getElementById('professionOther');
+            if (select.value === 'อื่นๆ') {
+                otherInput.classList.remove('hidden');
+                otherInput.required = true;
+            } else {
+                otherInput.classList.add('hidden');
+                otherInput.required = false;
+                otherInput.value = '';
+            }
+        }
+
+        // กด Submit
+        function submitForm(e) {
+            e.preventDefault();
+            const btn = document.getElementById('submitBtn');
+            btn.disabled = true;
+            btn.innerText = "กำลังบันทึก...";
+            
+            let profValue = document.getElementById('profession').value;
+            if(profValue === 'อื่นๆ') profValue = document.getElementById('professionOther').value;
+
+            const data = {
+                fullName: document.getElementById('fullName').value,
+                profession: profValue,
+                department: document.getElementById('department').value,
+                phone: document.getElementById('phone').value,
+                kidney: document.querySelector('input[name="kidney"]:checked').value,
+                organ: document.querySelector('input[name="organ"]:checked').value,
+                heart: document.querySelector('input[name="heart"]:checked').value,
+                timestamp: firebase.firestore.FieldValue.serverTimestamp() // เวลาบันทึก
+            };
+
+            if(!editId) {
+                // เพิ่มใหม่ (Add)
+                db.collection("ttls_registrations").add(data).then(() => {
+                    showModal('สำเร็จ!', 'บันทึกข้อมูลการลงทะเบียนเรียบร้อยแล้ว', 'success');
+                    resetForm();
+                }).catch(err => {
+                    showModal('ผิดพลาด', 'ไม่สามารถบันทึกได้: ' + err.message, 'error');
+                }).finally(() => { resetBtn(btn); });
+            } else {
+                // แก้ไข (Update)
+                db.collection("ttls_registrations").doc(editId).update(data).then(() => {
+                    showModal('สำเร็จ!', 'อัปเดตข้อมูลเรียบร้อยแล้ว', 'success');
+                    resetForm();
+                }).catch(err => {
+                    showModal('ผิดพลาด', 'ไม่สามารถอัปเดตได้: ' + err.message, 'error');
+                }).finally(() => { resetBtn(btn); });
+            }
+        }
+
+        function resetForm() {
+            document.getElementById('registrationForm').reset();
+            document.getElementById('professionOther').classList.add('hidden');
+            editId = null;
+        }
+
+        function resetBtn(btn) {
+            btn.disabled = false;
+            btn.innerText = "ยืนยันการลงทะเบียน";
+        }
+
+        // วาดตาราง
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            const emptyState = document.getElementById('emptyState');
+            tbody.innerHTML = '';
+            
+            if (registrations.length === 0) {
+                emptyState.innerText = "ยังไม่มีข้อมูลผู้ลงทะเบียน";
+                emptyState.style.display = 'block';
+            } else {
+                emptyState.style.display = 'none';
+                registrations.forEach((reg) => {
+                    const row = `<tr class="hover:bg-gray-50 transition duration-150">
+                        <td class="px-6 py-4">${reg.fullName}</td>
+                        <td class="px-6 py-4">${reg.profession}</td>
+                        <td class="px-6 py-4">${reg.department}</td>
+                        <td class="px-6 py-4">${reg.phone}</td>
+                        <td class="px-6 py-4 text-blue-600">${reg.kidney}</td>
+                        <td class="px-6 py-4 text-pink-500">${reg.organ}</td>
+                        <td class="px-6 py-4 text-green-600">${reg.heart}</td>
+                        <td class="px-6 py-4 text-center">
+                            <button onclick="editData('${reg.id}')" class="text-blue-500 hover:text-blue-700 mx-1" title="แก้ไข">✏️</button>
+                            <button onclick="confirmDelete('${reg.id}')" class="text-red-500 hover:text-red-700 mx-1" title="ลบ">🗑️</button>
+                        </td>
+                    </tr>`;
+                    tbody.innerHTML += row;
+                });
+            }
+        }
+
+        // เรียกข้อมูลมาแก้
+        function editData(id) {
+            editId = id;
+            const data = registrations.find(r => r.id === id);
+            
+            document.getElementById('fullName').value = data.fullName;
+            document.getElementById('department').value = data.department;
+            document.getElementById('phone').value = data.phone;
+            
+            const profSelect = document.getElementById('profession');
+            const options = Array.from(profSelect.options).map(opt => opt.value);
+            if(options.includes(data.profession)) {
+                profSelect.value = data.profession;
+                toggleOtherProfession();
+            } else {
+                profSelect.value = 'อื่นๆ';
+                toggleOtherProfession();
+                document.getElementById('professionOther').value = data.profession;
+            }
+
+            document.querySelector(`input[name="kidney"][value="${data.kidney}"]`).checked = true;
+            document.querySelector(`input[name="organ"][value="${data.organ}"]`).checked = true;
+            document.querySelector(`input[name="heart"][value="${data.heart}"]`).checked = true;
+
+            switchTab('register');
+            showModal('โหมดแก้ไข', 'ระบบดึงข้อมูลมาที่ฟอร์มแล้ว กรุณาแก้ไขและกดยืนยัน', 'info');
+        }
+
+        // ลบข้อมูล
+        let deleteTargetId = null;
+        function confirmDelete(id) {
+            deleteTargetId = id;
+            showModal('ยืนยันการลบ?', 'คุณต้องการลบข้อมูลรายชื่อนี้ใช่หรือไม่? ข้อมูลจะถูกลบออกจากฐานข้อมูลทันที', 'warning', true);
+        }
+
+        function executeDelete() {
+            if(deleteTargetId) {
+                db.collection("ttls_registrations").doc(deleteTargetId).delete().then(() => {
+                    closeModal();
+                });
+                deleteTargetId = null;
+            }
+        }
+
+        // Export Excel
+        function exportToExcel() {
+            if (registrations.length === 0) {
+                showModal('แจ้งเตือน', 'ยังไม่มีข้อมูลสำหรับ Export', 'warning');
+                return;
+            }
+            // ดึงเฉพาะฟิลด์ที่ต้องการส่งออก
+            const cleanData = registrations.map(r => ({
+                "ชื่อ-นามสกุล": r.fullName,
+                "ตำแหน่ง": r.profession,
+                "หน่วยงาน": r.department,
+                "เบอร์โทรศัพท์": r.phone,
+                "Kidney Transplant": r.kidney,
+                "Organ Donor": r.organ,
+                "Heart Transplant": r.heart
+            }));
+
+            const ws = XLSX.utils.json_to_sheet(cleanData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "รายชื่อผู้ลงทะเบียน");
+            XLSX.writeFile(wb, "ผู้ลงทะเบียน_Transplant.xlsx");
+        }
+
+        // ระบบเปลี่ยนหน้าต่าง (Tab)
+        function switchTab(tabName) {
+            document.getElementById('view-register').classList.add('hidden');
+            document.getElementById('view-admin').classList.add('hidden');
+            document.getElementById('tab-register').className = 'py-4 px-2 tab-inactive text-lg flex items-center';
+            document.getElementById('tab-admin').className = 'py-4 px-2 tab-inactive text-lg flex items-center';
+            
+            document.getElementById(`view-${tabName}`).classList.remove('hidden');
+            document.getElementById(`tab-${tabName}`).className = 'py-4 px-2 tab-active text-lg flex items-center';
+        }
+
+        // ระบบ Modal
+        function showModal(title, message, type = 'success', isConfirm = false) {
+            document.getElementById('modalTitle').innerText = title;
+            document.getElementById('modalMessage').innerText = message;
+            
+            const iconDiv = document.getElementById('modalIcon');
+            const confirmBtn = document.getElementById('modalConfirmBtn');
+            const cancelBtn = document.getElementById('modalCancelBtn');
+
+            if(type === 'success') {
+                iconDiv.innerHTML = '<span class="text-3xl">✅</span>';
+                iconDiv.className = 'mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-4';
+                confirmBtn.className = 'bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-6 rounded-lg';
+            } else if (type === 'warning') {
+                iconDiv.innerHTML = '<span class="text-3xl">⚠️</span>';
+                iconDiv.className = 'mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-yellow-100 mb-4';
+                confirmBtn.className = 'bg-yellow-500 hover:bg-yellow-600 text-white font-semibold py-2 px-6 rounded-lg';
+            } else {
+                iconDiv.innerHTML = '<span class="text-3xl">ℹ️</span>';
+                iconDiv.className = 'mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-blue-100 mb-4';
+                confirmBtn.className = 'bg-blue-500 hover:bg-blue-600 text-white font-semibold py-2 px-6 rounded-lg';
+            }
+
+            if(isConfirm) {
+                cancelBtn.classList.remove('hidden');
+                confirmBtn.onclick = executeDelete;
+            } else {
+                cancelBtn.classList.add('hidden');
+                confirmBtn.onclick = closeModal;
+            }
+
+            document.getElementById('customModal').classList.remove('hidden');
+        }
+
+        function closeModal() {
+            document.getElementById('customModal').classList.add('hidden');
+            deleteTargetId = null;
+        }
+    </script>
+</body>
+</html>
